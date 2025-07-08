@@ -21,12 +21,16 @@ def get_retry_count(job: Job) -> int:
 
 def increment_retry_count(job: Job):
     """Increments retry count in job.context.meta.step_retries and updates job context"""
-    meta = job.context.setdefault("meta", {})
-    step_id = meta.get("current_step")
+    step_id = (job.context or {}).get("meta", {}).get("current_step")
     if not step_id:
         return
+
+    meta = job.context.setdefault("meta", {})
     retries = meta.setdefault("step_retries", {})
     retries[step_id] = retries.get(step_id, 0) + 1
+
+    job.step_retry_counts = retries
+    job.context["meta"]["step_retries"] = retries
 
 
 def exceeded_max_retries(job: Job) -> bool:

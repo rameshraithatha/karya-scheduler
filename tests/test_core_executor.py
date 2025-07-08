@@ -63,7 +63,7 @@ async def test_execute_wait_step_within_retries(sample_steps, parameters):
 
         result = await executor.run_step(sample_steps[1])
 
-        assert result is None
+        assert result is "job_paused"
         assert mock_job.status == "WAITING"
         mock_session.commit.assert_called_once()
 

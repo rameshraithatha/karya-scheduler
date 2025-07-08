@@ -2,7 +2,7 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
-from api.routes import router
+from api.jobs import router
 from db.models import Job
 from main import app
 import uuid
@@ -27,10 +27,10 @@ def job_data():
 
 def test_start_job_success(client, job_data, mocker):
     mock_db = MagicMock()
-    mocker.patch("api.routes.SessionLocal", return_value=mock_db)
+    mocker.patch("api.jobs.SessionLocal", return_value=mock_db)
     mock_executor = MagicMock()
-    mocker.patch("api.routes.FlowExecutor", return_value=mock_executor)
-    mocker.patch("api.routes.asyncio.create_task", return_value=MagicMock())
+    mocker.patch("api.jobs.FlowExecutor", return_value=mock_executor)
+    mocker.patch("api.jobs.asyncio.create_task", return_value=MagicMock())
 
     # Just simulate DB behaviors
     mock_db.add.return_value = None
@@ -53,7 +53,7 @@ def test_get_job_steps_success(client, mocker):
         id=job_id, workflow_name="flow", status="SCHEDULED", steps=[{"id": "a"}]
     )
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(
                 return_value=MagicMock(
@@ -72,7 +72,7 @@ def test_get_job_steps_success(client, mocker):
 
 def test_get_job_steps_not_found(client, mocker):
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(
                 return_value=MagicMock(
@@ -95,7 +95,7 @@ def test_get_job_status_success(client, mocker):
         id=job_id, workflow_name="TestFlow", status="RUNNING", context={"key": "val"}
     )
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(
                 return_value=MagicMock(
@@ -114,7 +114,7 @@ def test_get_job_status_success(client, mocker):
 
 def test_get_job_status_not_found(client, mocker):
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(
                 return_value=MagicMock(
@@ -135,7 +135,7 @@ def test_delete_job_success(client, mocker):
     mock_job = Job(id=job_id, workflow_name="Test", status="SCHEDULED", context={})
     mock_db = MagicMock()
     mock_db.query.return_value.filter.return_value.first.return_value = mock_job
-    mocker.patch("api.routes.SessionLocal", return_value=mock_db)
+    mocker.patch("api.jobs.SessionLocal", return_value=mock_db)
 
     response = client.delete(f"/jobs/{job_id}")
     assert response.status_code == 200
@@ -144,7 +144,7 @@ def test_delete_job_success(client, mocker):
 
 def test_delete_job_not_found(client, mocker):
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(
                 return_value=MagicMock(
@@ -163,7 +163,7 @@ def test_delete_job_not_found(client, mocker):
 def test_list_jobs(client, mocker):
     job = Job(id="1", workflow_name="wf", status="SCHEDULED", context={"x": 1})
     mocker.patch(
-        "api.routes.SessionLocal",
+        "api.jobs.SessionLocal",
         return_value=MagicMock(
             query=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[job])))
         ),

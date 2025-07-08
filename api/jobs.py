@@ -13,7 +13,6 @@ router = APIRouter()
 async def start_job(request: JobRequest):
     job_id = str(uuid.uuid4())
     db = SessionLocal()
-    print("#####", request)
     job = Job(
         id=job_id,
         workflow_name=request.workflow_name,

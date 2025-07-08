@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from api.routes import router as job_router
+from api.jobs import router as job_router
 from api.actions import router as actions_router
 from api.mock_routes import router as mock_router
 from db.init_db import init_db

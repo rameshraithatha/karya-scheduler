@@ -20,12 +20,12 @@ class Job(Base):
     steps = Column(MutableList.as_mutable(JSON), nullable=True)
     current_step_id = Column(
         String, nullable=True
-    )  # 🔥 Needed to track which step is running
+    )
     step_retry_counts = Column(
         MutableDict.as_mutable(JSON), nullable=True
-    )  # 🔥 Needed for max_retries tracking
+    )
     resume_at = Column(DateTime, nullable=True)  # ⏰ For resuming wait steps
-    error_message = Column(Text, nullable=True)
+    message = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

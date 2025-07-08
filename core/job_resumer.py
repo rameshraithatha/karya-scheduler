@@ -1,10 +1,4 @@
-# job_resumer.py
-
-import sys
-
-sys.path.append(".")  # Ensure root path for imports
-
-from datetime import datetime
+from datetime import datetime, UTC
 import asyncio
 import logging
 from db.session import SessionLocal
@@ -29,15 +23,13 @@ async def resume_due_jobs():
 
         if job_utils.exceeded_max_retries(job):
             job.status = "FAILED"
-            job.error_message = (
+            job.message = (
                 f"Max retries exceeded for step '{job.context['meta']['current_step']}'"
             )
             session.commit()
             logger.warning(f"[Job {job.id}] Failed — max retries exceeded.")
             continue
 
-        # 🚨 Ensure retry count is updated and committed
-        job_utils.increment_retry_count(job)
         job.status = "RUNNING"
         job.updated_at = datetime.now(UTC)
         session.commit()  # commit after mutation

@@ -3,7 +3,6 @@ import httpx
 import jinja2
 import logging
 from datetime import datetime, timedelta, UTC
-
 from typing import Dict, List, Any, Optional
 from db.models import Job, Action
 from db.session import SessionLocal
@@ -18,26 +17,38 @@ class FlowExecutor:
     def __init__(
         self, steps: List[Dict[str, Any]], parameters: Dict[str, Any], job_id: str
     ):
+
+        self.job_id = job_id
+        self.template_env = jinja2.Environment()
+        self.session = SessionLocal()
+        self.default_max_retries = 5
+
+        # Fetch job to get existing retry state if any
+        job = self.session.query(Job).get(job_id)
+
+        # Load existing retry counts from DB (if any)
+        step_retries = {}
+        if job and job.step_retry_counts:
+            step_retries = job.step_retry_counts.copy()
+
         self.steps = steps
         self.context = {
             "context": parameters,
             "meta": {
                 "job_id": job_id,
                 "start_time": datetime.now(UTC).isoformat(),
-                "step_retries": {},
+                "step_retries": step_retries
             },
         }
-        self.job_id = job_id
-        self.template_env = jinja2.Environment()
-        self.session = SessionLocal()
-        self.retry_counts = {}
-        self.default_max_retries = 5
+
+        self.retry_counts = step_retries.copy()
 
     def persist_context(self):
         job = self.session.query(Job).get(self.job_id)
         if job:
             job.context = self.context
             job.current_step_id = self.context["meta"].get("current_step")
+            job.step_retry_counts = self.context["meta"]["step_retries"].copy()
             self.session.commit()
             logger.info(
                 f"[Job {self.job_id}] Context persisted after step '{job.current_step_id}'"
@@ -50,8 +61,8 @@ class FlowExecutor:
             job.context = self.context
             job.current_step_id = self.context["meta"].get("current_step")
             job.updated_at = datetime.now(UTC)
-            if error and hasattr(job, "error_message"):
-                job.error_message = error
+            if error and hasattr(job, "message"):
+                job.message = error
             self.session.commit()
             logger.info(f"[Job {self.job_id}] Status updated to {status}")
 
@@ -132,8 +143,8 @@ class FlowExecutor:
 
         try:
             if step_type == "task":
-                action = await self.load_action(step["action"])
                 result = None
+                action = await self.load_action(step["action"])
                 if action["type"] == "http":
                     result = await self.execute_http(action)
                 self.persist_context()
@@ -160,6 +171,7 @@ class FlowExecutor:
                         "FAILED", f"Invalid wait duration for step '{step_id}'"
                     )
                     return None
+
                 try:
                     resume_after_seconds = float(duration_str)
                 except ValueError:
@@ -175,18 +187,18 @@ class FlowExecutor:
                     job.status = "WAITING"
                     job.context = self.context
                     job.current_step_id = step_id
-                    job.step_retry_counts = self.context["meta"]["step_retries"]
+                    job.step_retry_counts = self.context["meta"]["step_retries"].copy()
                     job.updated_at = datetime.now(UTC)
                     self.session.commit()
                     logger.info(
                         f"[Job {self.job_id}] Paused. Will resume at {resume_at.isoformat()}"
                     )
-                return None  # Halt execution here; poller will resume it later
+                return "job_paused"  # Halt execution here; poller will resume it later
 
             elif step_type == "choice":
-                result = self.evaluate_choice(step)
+                next_id = self.evaluate_choice(step)
                 self.persist_context()
-                return result
+                return next_id
 
             else:
                 raise ValueError(f"Unsupported step type: {step_type}")
@@ -200,7 +212,6 @@ class FlowExecutor:
 
     async def execute_steps(self) -> str:
         index_map = {step["id"]: i for i, step in enumerate(self.steps)}
-
         last_step_id = self.context["meta"].get("current_step")
         i = index_map.get(last_step_id, 0)
         logger.info(
@@ -210,17 +221,15 @@ class FlowExecutor:
         while i < len(self.steps):
             step = self.steps[i]
             result = await self.run_step(step)
-
-            if result is None:
+            if result == "job_paused":
                 self.update_job_status("WAITING", f"Paused at step '{step['id']}'")
                 return "paused"
 
             if step["type"] == "choice":
-                next_id = result
-                if next_id not in index_map:
-                    self.update_job_status("FAILED", f"Invalid next step ID: {next_id}")
+                if result not in index_map:
+                    self.update_job_status("FAILED", f"Invalid next step ID: {result}")
                     return "failed"
-                i = index_map[next_id]
+                i = index_map[result]
             else:
                 i += 1
 
