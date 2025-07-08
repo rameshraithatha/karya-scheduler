@@ -1,11 +1,13 @@
 import re
+import uuid
+from unittest.mock import MagicMock
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, patch
+
 from api.jobs import router
 from db.models import Job
 from main import app
-import uuid
 
 app.include_router(router)
 
